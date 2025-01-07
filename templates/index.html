@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flash Detection Tool - Content Safety Analysis</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            /* Light theme */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --primary-color: #2196F3;
+            --primary-hover: #1976D2;
+            --warning-color: #ff9800;
+            --danger-color: #f44336;
+            --success-color: #4CAF50;
+            --border-color: #e0e0e0;
+            --card-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --hover-bg: #f0f7ff;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+            --primary-color: #64B5F6;
+            --primary-hover: #90CAF9;
+            --border-color: #404040;
+            --card-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            --hover-bg: #3d3d3d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--bg-secondary);
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+        
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: var(--card-shadow);
+            z-index: 1000;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+        
+        .container {
+            background-color: var(--bg-primary);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            margin-top: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.2em;
+        }
+        
+        .advisory {
+            background-color: var(--bg-secondary);
+            border-left: 4px solid var(--warning-color);
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 8px;
+        }
+        
+        .advisory-title {
+            color: var(--warning-color);
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2em;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+        
+        .feature-card {
+            padding: 30px;
+            background: var(--bg-primary);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+        
+        .feature-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+        }
+        
+        .upload-container {
+            text-align: center;
+            margin: 40px 0;
+            padding: 40px;
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            background-color: var(--bg-secondary);
+            transition: all 0.3s ease;
+        }
+        
+        .upload-container:hover {
+            border-color: var(--primary-color);
+            background-color: var(--hover-bg);
+        }
+        
+        .form-group {
+            margin-bottom: 30px;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            margin: 20px 0;
+        }
+        
+        .custom-file-input {
+            display: inline-block;
+            padding: 15px 30px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .custom-file-input:hover {
+            background: var(--primary-hover);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .sensitivity-select {
+            padding: 12px;
+            width: 100%;
+            max-width: 350px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .sensitivity-select:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+        
+        .analyze-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .analyze-btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        
+        .analyze-btn:disabled {
+            background-color: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 30px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            margin: 30px 0;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .results {
+            margin-top: 40px;
+            display: none;
+        }
+        
+        .video-container {
+            margin: 30px 0;
+            padding: 25px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .video-container h3 {
+            margin-bottom: 20px;
+            color: var(--primary-color);
+            font-size: 1.4em;
+        }
+        
+        .video-container video {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+        }
+        
+        .flash-events-container {
+            margin-top: 40px;
+            padding: 25px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+        
+        .flash-event {
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 12px;
+            border-left: 4px solid var(--border-color);
+            background-color: var(--bg-primary);
+            box-shadow: var(--card-shadow);
+            transition: transform 0.3s ease;
+        }
+        
+        .flash-event:hover {
+            transform: translateX(5px);
+        }
+        
+        .risk-HIGH {
+            border-left-color: var(--danger-color);
+        }
+        
+        .risk-MEDIUM {
+            border-left-color: var(--warning-color);
+        }
+        
+        .error-message {
+            color: var(--danger-color);
+            background-color: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: none;
+            border-left: 4px solid var(--danger-color);
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <i class="fas fa-moon"></i>
+    </button>
+
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-shield-alt"></i> Flash Detection Tool</h1>
+            <p>Advanced video analysis for safer content viewing</p>
+        </div>
+
+        <div class="advisory">
+            <div class="advisory-title">
+                <i class="fas fa-exclamation-triangle"></i>
+                Important Advisory
+            </div>
+            <p>While this tool uses advanced algorithms and machine learning models to detect potentially harmful flashing patterns, it is not 100% accurate and should not be considered a definitive safety guarantee. Please note:</p>
+            <ul>
+                <li>The tool may occasionally miss some flash patterns or generate false positives</li>
+                <li>Different individuals may have different sensitivity thresholds</li>
+                <li>This is an assistive tool and should not replace professional content review</li>
+                <li>When in doubt, please consult with medical professionals or content safety experts</li>
+            </ul>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <h3><i class="fas fa-search"></i> Flash Detection</h3>
+                <p>Analyzes videos for rapid brightness changes and alternating patterns that could trigger photosensitive reactions.</p>
+            </div>
+            <div class="feature-card">
+                <h3><i class="fas fa-video"></i> Safe Version Generation</h3>
+                <p>Creates modified versions of videos with potentially harmful segments replaced with warning screens.</p>
+            </div>
+            <div class="feature-card">
+                <h3><i class="fas fa-file-alt"></i> Detailed Reports</h3>
+                <p>Generates comprehensive PDF reports with timestamps and risk levels of detected flash patterns.</p>
+            </div>
+        </div>
+
+        <div class="upload-container">
+            <h2><i class="fas fa-upload"></i> Upload Video for Analysis</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <div class="file-input-wrapper">
+                        <label class="custom-file-input" for="video">
+                            <i class="fas fa-file-video"></i> Choose Video File
+                        </label>
+                        <input type="file" id="video" name="video" accept="video/*" required>
+                    </div>
+                    <p id="selected-file" style="margin-top: 10px; color: var(--text-secondary);"></p>
+                </div>
+                <div class="form-group">
+                    <label for="sensitivity">Flash Detection Sensitivity:</label>
+                    <select id="sensitivity" name="sensitivity" class="sensitivity-select">
+                        <option value="all" selected>All Flashes (Maximum Safety)</option>
+                        <option value="high">High Risk Only</option>
+                    </select>
+                    <p class="sensitivity-info" style="color: var(--text-secondary);">
+                        <strong>All Flashes:</strong> Detects and blocks both medium and high-risk patterns<br>
+                        <strong>High Risk Only:</strong> Focuses on the most severe flash patterns
+                    </p>
+                </div>
+                <button type="submit" class="analyze-btn">
+                    <i class="fas fa-play"></i> Analyze Video
+                </button>
+            </form>
+        </div>
+
+        <div id="loadingIndicator" class="loading-indicator">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p style="margin-top: 15px;">Processing video... Please wait</p>
+            <p style="color: var(--text-secondary);">This may take a few minutes depending on the video size</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div id="results" class="results">
+            <h2><i class="fas fa-chart-bar"></i> Analysis Results</h2>
+            <div class="video-container">
+                <h3><i class="fas fa-eye"></i> Preview Version</h3>
+                <video id="preview-video" controls>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            
+            <div class="video-container">
+                <h3><i class="fas fa-shield-alt"></i> Safe Version</h3>
+                <video id="safe-video" controls>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+
+            <div id="flash-events" class="flash-events-container">
+                <h3><i class="fas fa-exclamation-circle"></i> Detected Flash Events</h3>
+                <!-- Flash events will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const html = document.documentElement;
+            const themeIcon = document.querySelector('.theme-toggle i');
+            
+            if (html.getAttribute('data-theme') === 'light') {
+                html.setAttribute('data-theme', 'dark');
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            } else {
+                html.setAttribute('data-theme', 'light');
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            }
+        }
+
+        // File input handling
+        document.getElementById('video').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name || 'No file selected';
+            document.getElementById('selected-file').textContent = fileName;
+        });
+
+        // Form submission
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const videoFile = document.getElementById('video').files[0];
+            const sensitivity = document.getElementById('sensitivity').value;
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultsDiv = document.getElementById('results');
+            const errorMessage = document.getElementById('errorMessage');
+            const submitButton = document.querySelector('.analyze-btn');
+            
+            if (!videoFile) {
+                errorMessage.textContent = 'Please select a video file';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            // Reset UI
+            errorMessage.style.display = 'none';
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            loadingIndicator.style.display = 'block';
+            resultsDiv.style.display = 'none';
+            
+            formData.append('video', videoFile);
+            formData.append('sensitivity', sensitivity);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Display results
+                    const flashEventsHtml = data.flash_events.map(event => `
+                        <div class="flash-event risk-${event.risk_level}">
+                            <strong><i class="fas fa-clock"></i> Time:</strong> ${event.timestamp.toFixed(2)}s
+                            <br>
+                            <strong><i class="fas fa-exclamation-triangle"></i> Risk Level:</strong> ${event.risk_level}
+                            <br>
+                            <strong><i class="fas fa-bolt"></i> Intensity:</strong> ${event.intensity.toFixed(1)}%
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('flash-events').innerHTML = `
+                        <h3><i class="fas fa-exclamation-circle"></i> Detected Flash Events (${data.flash_events.length})</h3>
+                        ${flashEventsHtml}
+                    `;
+                    
+                    // Update video sources
+                    document.getElementById('preview-video').src = data.preview_url;
+                    document.getElementById('safe-video').src = data.safe_version_url;
+                    
+                    resultsDiv.style.display = 'block';
+                } else {
+                    throw new Error(data.error || 'Failed to process video');
+                }
+            } catch (error) {
+                errorMessage.textContent = `Error: ${error.message}`;
+                errorMessage.style.display = 'block';
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-play"></i> Analyze Video';
+                loadingIndicator.style.display = 'none';
+            }
+        });
+
+        // Check system preference for dark mode
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.querySelector('.theme-toggle i').classList.remove('fa-moon');
+            document.querySelector('.theme-toggle i').classList.add('fa-sun');
+        }
+    </script>
+</body>
+</html> 
