@@ -378,9 +378,14 @@
                         <strong>High Risk Only:</strong> Focuses on the most severe flash patterns
                     </p>
                 </div>
-                <button type="submit" class="analyze-btn">
-                    <i class="fas fa-play"></i> Analyze Video
-                </button>
+                <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
+                    <button type="submit" class="analyze-btn">
+                        <i class="fas fa-play"></i> Analyze Video
+                    </button>
+                    <a id="reportLink" href="#" class="analyze-btn" target="_blank" style="display: none; text-decoration: none;">
+                        <i class="fas fa-file-pdf"></i> Download Report
+                    </a>
+                </div>
             </form>
         </div>
 
@@ -394,6 +399,13 @@
 
         <div id="results" class="results">
             <h2><i class="fas fa-chart-bar"></i> Analysis Results</h2>
+            
+            <div style="text-align: right; margin-bottom: 20px;">
+                <a id="reportLink" href="#" class="analyze-btn" target="_blank" style="display: none;">
+                    <i class="fas fa-file-pdf"></i> Download Analysis Report
+                </a>
+            </div>
+
             <div class="video-container">
                 <h3><i class="fas fa-eye"></i> Preview Version</h3>
                 <video id="preview-video" controls>
@@ -475,7 +487,12 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Display results
+                    // Show and update PDF link
+                    const reportLink = document.getElementById('reportLink');
+                    reportLink.href = data.report_url;
+                    reportLink.style.display = 'inline-block';
+
+                    // Display flash events
                     const flashEventsHtml = data.flash_events.map(event => `
                         <div class="flash-event risk-${event.risk_level}">
                             <strong><i class="fas fa-clock"></i> Time:</strong> ${event.timestamp.toFixed(2)}s
@@ -486,9 +503,13 @@
                         </div>
                     `).join('');
                     
-                    document.getElementById('flash-events').innerHTML = `
+                    // Update flash events
+                    const flashEventsContainer = document.getElementById('flash-events');
+                    flashEventsContainer.innerHTML = `
                         <h3><i class="fas fa-exclamation-circle"></i> Detected Flash Events (${data.flash_events.length})</h3>
-                        ${flashEventsHtml}
+                        <div id="events-list">
+                            ${flashEventsHtml}
+                        </div>
                     `;
                     
                     // Update video sources

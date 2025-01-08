@@ -130,7 +130,7 @@ def generate_preview(video_path, output_path):
         if not ret:
             break
             
-        # Add warning text if needed
+        # Add warning text
         cv2.putText(frame, "Preview Version", (10, 30), 
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         
@@ -139,8 +139,8 @@ def generate_preview(video_path, output_path):
     cap.release()
     out.release()
     
-    # Convert to MP4 using ffmpeg, preserving audio
-    os.system(f'ffmpeg -y -i {temp_path} -i {video_path} -c:v libx264 -c:a aac -map 0:v:0 -map 1:a:0? {output_path}')
+    # Convert to MP4 using ffmpeg with specific codec settings
+    os.system(f'ffmpeg -y -i {temp_path} -i {video_path} -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k -movflags +faststart -map 0:v:0 -map 1:a:0? {output_path}')
     os.remove(temp_path)
 
 def create_safe_version(video_path, output_path, flash_events, sensitivity='all'):
@@ -252,32 +252,93 @@ def generate_pdf_report(video_name, flash_events, output_path):
     logger.info(f"Generating PDF report for: {video_name}")
     
     c = canvas.Canvas(output_path)
-    c.drawString(72, 800, f"Flash Analysis Report - {video_name}")
-    c.drawString(72, 780, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    y = 740
-    c.drawString(72, y, "Detected Flash Events:")
+    # Title
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(72, 800, "Flash Analysis Report")
+    
+    # Video details
+    c.setFont("Helvetica", 12)
+    c.drawString(72, 770, "Video:")
+    
+    # Handle long video names by starting a new line
+    if len(video_name) > 60:  # If name is too long
+        c.drawString(92, 750, video_name[:60])
+        c.drawString(92, 730, video_name[60:])
+        y = 710  # Adjust starting y position for next items
+    else:
+        c.drawString(92, 750, video_name)
+        y = 730  # Standard y position if name fits on one line
+    
+    c.drawString(72, y, f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     y -= 20
+    c.drawString(72, y, f"Total Flash Events Detected: {len(flash_events)}")
     
-    for event in flash_events:
-        c.drawString(72, y, f"Timestamp: {event['timestamp']:.2f}s")
-        c.drawString(72, y-15, f"Risk Level: {event['risk_level']}")
-        c.drawString(72, y-30, f"Intensity: {event['intensity']:.2f}")
-        y -= 50
+    # Summary
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, y-40, "Risk Level Summary:")
+    c.setFont("Helvetica", 12)
+    high_risk = sum(1 for event in flash_events if event["risk_level"] == "HIGH")
+    medium_risk = sum(1 for event in flash_events if event["risk_level"] == "MEDIUM")
+    c.drawString(92, y-60, f"• High Risk Events: {high_risk}")
+    c.drawString(92, y-80, f"• Medium Risk Events: {medium_risk}")
+    
+    # Detailed Events List
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(72, y-120, "Detailed Flash Events:")
+    
+    y = y-160
+    for i, event in enumerate(flash_events, 1):
+        if y < 100:  # Start new page if near bottom
+            c.showPage()
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(72, 800, "Detailed Flash Events (continued):")
+            y = 770
+            
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(72, y, f"Event #{i}")
+        c.setFont("Helvetica", 12)
+        y -= 20
+        c.drawString(92, y, f"Timestamp: {event['timestamp']:.2f} seconds")
+        y -= 20
+        c.drawString(92, y, f"Risk Level: {event['risk_level']}")
+        y -= 20
+        c.drawString(92, y, f"Intensity: {event['intensity']:.1f}%")
+        y -= 40
+    
+    # Footer with disclaimer
+    c.setFont("Helvetica", 10)
+    c.drawString(72, 50, "Note: This report is generated automatically and should be used as a reference only.")
+    c.drawString(72, 35, "Please consult with medical professionals for specific photosensitivity concerns.")
     
     c.save()
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['PREVIEW_FOLDER'] = 'static/previews'
-app.config['SAFE_VERSIONS_FOLDER'] = 'static/safe_versions'
-app.config['REPORTS_FOLDER'] = 'static/reports'
+app.config['PREVIEW_FOLDER'] = '/tmp/static/previews'
+app.config['SAFE_VERSIONS_FOLDER'] = '/tmp/static/safe_versions'
+app.config['REPORTS_FOLDER'] = '/tmp/static/reports'
 
 # Ensure required directories exist
-for folder in [app.config['UPLOAD_FOLDER'], app.config['PREVIEW_FOLDER'], 
-               app.config['SAFE_VERSIONS_FOLDER'], app.config['REPORTS_FOLDER']]:
-    os.makedirs(folder, exist_ok=True)
+@app.before_request
+def create_directories():
+    for folder in [app.config['UPLOAD_FOLDER'], 
+                   app.config['PREVIEW_FOLDER'],
+                   app.config['SAFE_VERSIONS_FOLDER'], 
+                   app.config['REPORTS_FOLDER']]:
+        os.makedirs(folder, exist_ok=True)
+
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Serve static files from various folders."""
+    if 'previews' in filename:
+        return send_from_directory('/tmp/static/previews', filename.replace('previews/', ''))
+    elif 'safe_versions' in filename:
+        return send_from_directory('/tmp/static/safe_versions', filename.replace('safe_versions/', ''))
+    elif 'reports' in filename:
+        return send_from_directory('/tmp/static/reports', filename.replace('reports/', ''))
+    return 'File not found', 404
 
 @app.route('/')
 def index():
