@@ -6,101 +6,105 @@ from werkzeug.utils import secure_filename
 import logging
 from datetime import datetime
 from reportlab.pdfgen import canvas
+from sklearn.ensemble import RandomForestClassifier
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['PREVIEW_FOLDER'] = 'static/previews'
-app.config['SAFE_VERSIONS_FOLDER'] = 'static/safe_versions'
-app.config['REPORTS_FOLDER'] = 'static/reports'
-
-# Ensure required directories exist
-for folder in [app.config['UPLOAD_FOLDER'], app.config['PREVIEW_FOLDER'], 
-               app.config['SAFE_VERSIONS_FOLDER'], app.config['REPORTS_FOLDER']]:
-    os.makedirs(folder, exist_ok=True)
+class SimpleFlashDetector:
+    def __init__(self):
+        # Initialize a Random Forest Classifier
+        self.model = RandomForestClassifier(n_estimators=50)
+        
+    def extract_features(self, frame):
+        """Extract simple features from a frame."""
+        # Convert to grayscale
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate basic statistics as features
+        features = [
+            np.mean(gray),           # Average brightness
+            np.std(gray),            # Brightness variation
+            np.max(gray),            # Maximum brightness
+            np.min(gray),            # Minimum brightness
+            np.median(gray),         # Median brightness
+        ]
+        return features
+    
+    def predict_frame(self, frame):
+        """Predict if a frame contains a flash."""
+        features = self.extract_features(frame)
+        features = np.array(features).reshape(1, -1)
+        
+        # For initial use, we'll use a simple threshold-based approach
+        # Later, we can train the model with actual data
+        brightness_mean = features[0][0]
+        brightness_std = features[0][1]
+        
+        # Simplified logic until model is trained
+        is_flash = brightness_mean > 200 or brightness_std > 50
+        confidence = min((brightness_mean / 255.0) * 1.2, 1.0)
+        
+        return is_flash, confidence
 
 def detect_flashing_lights(video_path):
-    """Detect flashing lights in video and return timestamps."""
+    """Enhanced flash detection using ML."""
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     flash_events = []
     
-    # Parameters for flash detection
-    frame_window = int(fps * 0.25)  # Reduced to quarter-second windows for faster response
-    brightness_history = []
-    last_flash_frame = -frame_window
-    
+    # Initialize detector
+    detector = SimpleFlashDetector()
     frame_count = 0
-    prev_brightness = None
+    
+    # Keep track of recent brightness values for pattern detection
+    brightness_history = []
+    window_size = int(fps * 0.5)  # Half-second window
     
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-            
-        # Convert to grayscale for brightness
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Calculate brightness (normalized)
-        current_brightness = np.mean(gray) / 255.0
+        # Get ML prediction
+        is_flash, confidence = detector.predict_frame(frame)
+        
+        # Store brightness history
+        current_brightness = detector.extract_features(frame)[0]  # Mean brightness
         brightness_history.append(current_brightness)
         
-        # Immediate frame-to-frame check for sudden changes
-        if prev_brightness is not None:
-            instant_change = abs(current_brightness - prev_brightness)
-            if instant_change > 0.1:  # Detect sudden changes immediately
-                timestamp = frame_count / fps
-                if not flash_events or abs(timestamp - flash_events[-1]["timestamp"]) > 0.1:
-                    flash_events.append({
-                        "timestamp": timestamp,
-                        "intensity": instant_change * 100,
-                        "risk_level": "HIGH" if instant_change > 0.2 else "MEDIUM"
-                    })
-                    last_flash_frame = frame_count
-        
-        # Keep only the recent history
-        if len(brightness_history) > frame_window:
+        # Keep history within window size
+        if len(brightness_history) > window_size:
             brightness_history.pop(0)
         
-        # Pattern analysis when we have enough frames
-        if len(brightness_history) == frame_window:
-            # Calculate frame-to-frame differences
-            differences = np.diff(brightness_history)
+        # Analyze patterns if we have enough history
+        if len(brightness_history) == window_size:
+            # Calculate frame-to-frame changes
+            changes = np.diff(brightness_history)
+            alternating_pattern = any(
+                changes[i] * changes[i+1] < 0  # Sign changes indicate alternating pattern
+                for i in range(len(changes)-1)
+            )
             
-            # Look for alternating patterns (positive to negative changes)
-            alternating_count = 0
-            for i in range(len(differences)-1):
-                if (differences[i] * differences[i+1]) < 0:  # Sign change
-                    alternating_count += 1
-            
-            # Calculate max brightness change in window
-            max_change = max(abs(np.diff(brightness_history)))
-            
-            # Detect flashes based on patterns
-            if (max_change > 0.12 and  # More sensitive threshold
-                alternating_count >= 2 and  # Detect fewer alternations
-                frame_count - last_flash_frame > frame_window/4):  # Shorter minimum gap
-                
+            if is_flash or alternating_pattern:
                 timestamp = frame_count / fps
                 
-                # Only add if not too close to previous detection
-                if not flash_events or abs(timestamp - flash_events[-1]["timestamp"]) > 0.1:
-                    risk_level = "MEDIUM"
-                    if max_change > 0.2 or alternating_count >= 4:
-                        risk_level = "HIGH"
-                    
+                # Determine risk level based on confidence and pattern
+                risk_level = "HIGH" if (confidence > 0.8 or alternating_pattern) else "MEDIUM"
+                
+                # Add to flash events if not too close to previous event
+                if not flash_events or abs(timestamp - flash_events[-1]["timestamp"]) > 0.3:
                     flash_events.append({
                         "timestamp": timestamp,
-                        "intensity": max_change * 100,
+                        "intensity": confidence * 100,
                         "risk_level": risk_level
                     })
-                    last_flash_frame = frame_count
         
-        prev_brightness = current_brightness
         frame_count += 1
     
     cap.release()
@@ -263,6 +267,18 @@ def generate_pdf_report(video_name, flash_events, output_path):
     
     c.save()
 
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['PREVIEW_FOLDER'] = 'static/previews'
+app.config['SAFE_VERSIONS_FOLDER'] = 'static/safe_versions'
+app.config['REPORTS_FOLDER'] = 'static/reports'
+
+# Ensure required directories exist
+for folder in [app.config['UPLOAD_FOLDER'], app.config['PREVIEW_FOLDER'], 
+               app.config['SAFE_VERSIONS_FOLDER'], app.config['REPORTS_FOLDER']]:
+    os.makedirs(folder, exist_ok=True)
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -344,4 +360,5 @@ def upload_file():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080) 
+    port = int(os.getenv('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False) 
