@@ -314,11 +314,11 @@ def generate_pdf_report(video_name, flash_events, output_path):
     c.save()
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['PREVIEW_FOLDER'] = '/tmp/static/previews'
-app.config['SAFE_VERSIONS_FOLDER'] = '/tmp/static/safe_versions'
-app.config['REPORTS_FOLDER'] = '/tmp/static/reports'
+app.config['PREVIEW_FOLDER'] = 'static/previews'
+app.config['SAFE_VERSIONS_FOLDER'] = 'static/safe_versions'
+app.config['REPORTS_FOLDER'] = 'static/reports'
 
 # Ensure required directories exist
 @app.before_request
@@ -332,12 +332,13 @@ def create_directories():
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files from various folders."""
+    logger.info(f"Attempting to serve static file: {filename}")
     if 'previews' in filename:
-        return send_from_directory('/tmp/static/previews', filename.replace('previews/', ''))
+        return send_from_directory('static/previews', filename.replace('previews/', ''))
     elif 'safe_versions' in filename:
-        return send_from_directory('/tmp/static/safe_versions', filename.replace('safe_versions/', ''))
+        return send_from_directory('static/safe_versions', filename.replace('safe_versions/', ''))
     elif 'reports' in filename:
-        return send_from_directory('/tmp/static/reports', filename.replace('reports/', ''))
+        return send_from_directory('static/reports', filename.replace('reports/', ''))
     return 'File not found', 404
 
 @app.route('/')
@@ -357,18 +358,12 @@ def upload_file():
     
     logger.info(f"Received file: {file.filename} with sensitivity: {sensitivity}")
     
-    if file.filename == '':
-        logger.error("Empty filename received")
-        return jsonify({'error': 'No selected file'}), 400
-    
     try:
         # Secure the filename and save the file
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         logger.info(f"Saving file to: {file_path}")
         file.save(file_path)
-        
-        logger.info(f"Processing file: {filename}")
         
         # Analyze video for flashing lights
         logger.info(f"Analyzing video: {filename}")
@@ -380,30 +375,33 @@ def upload_file():
         preview_path = os.path.join(app.config['PREVIEW_FOLDER'], preview_filename)
         logger.info(f"Generating preview at: {preview_path}")
         generate_preview(file_path, preview_path)
+        logger.info("Preview generation complete")
         
         # Create safe version
         safe_filename = f"safe_{filename}.mp4"
         safe_path = os.path.join(app.config['SAFE_VERSIONS_FOLDER'], safe_filename)
         logger.info(f"Generating safe version at: {safe_path}")
         create_safe_version(file_path, safe_path, flash_events, sensitivity)
+        logger.info("Safe version generation complete")
         
         # Generate PDF report
         report_filename = f"report_{filename}.pdf"
         report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
         logger.info(f"Generating report at: {report_path}")
         generate_pdf_report(filename, flash_events, report_path)
+        logger.info("PDF report generation complete")
+        
+        # Verify files exist and log their sizes
+        for path, desc in [(preview_path, "Preview"), (safe_path, "Safe version"), (report_path, "Report")]:
+            if os.path.exists(path):
+                size = os.path.getsize(path)
+                logger.info(f"{desc} file exists, size: {size} bytes")
+            else:
+                raise Exception(f"{desc} file was not created")
         
         # Clean up uploaded file
         os.remove(file_path)
         logger.info("Cleaned up uploaded file")
-        
-        # Verify files exist
-        if not os.path.exists(preview_path):
-            raise Exception("Preview file was not created")
-        if not os.path.exists(safe_path):
-            raise Exception("Safe version file was not created")
-        if not os.path.exists(report_path):
-            raise Exception("Report file was not created")
         
         response_data = {
             'message': 'Video processed successfully',
@@ -418,6 +416,8 @@ def upload_file():
         
     except Exception as e:
         logger.error(f"Error processing video: {str(e)}", exc_info=True)
+        if os.path.exists(file_path):
+            os.remove(file_path)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
