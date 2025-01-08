@@ -1,6 +1,6 @@
 # Flash Detection Web App
 
-This web application analyzes video files to detect instances of flashing lights and provides timestamps where they occur. This can be useful for content warnings or identifying potentially problematic content for photosensitive individuals.
+This web application analyzes video files to detect instances of flashing lights and provides timestamps where they occur. This can be useful for content warnings or identifying potentially problematic content for photosensitive individuals. You can test it out at `https://flashdetection.onrender.com/`
 
 ## Features
 
