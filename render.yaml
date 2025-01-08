@@ -2,7 +2,7 @@ services:
   - type: web
     name: flash-detection-app
     env: python
-    buildCommand: apt-get update && apt-get install -y ffmpeg && pip install -r requirements.txt
+    buildCommand: curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y ffmpeg && pip install -r requirements.txt
     startCommand: gunicorn app:app --timeout 300
     envVars:
       - key: PYTHON_VERSION
