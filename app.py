@@ -46,8 +46,8 @@ class SimpleFlashDetector:
         brightness_mean = features[0][0]
         brightness_std = features[0][1]
         
-        # Simplified logic until model is trained
-        is_flash = brightness_mean > 200 or brightness_std > 50
+        # Increased thresholds to reduce sensitivity
+        is_flash = brightness_mean > 230 or brightness_std > 70  # Previously 200 and 50
         confidence = min((brightness_mean / 255.0) * 1.2, 1.0)
         
         return is_flash, confidence
@@ -86,19 +86,24 @@ def detect_flashing_lights(video_path):
         if len(brightness_history) == window_size:
             # Calculate frame-to-frame changes
             changes = np.diff(brightness_history)
-            alternating_pattern = any(
-                changes[i] * changes[i+1] < 0  # Sign changes indicate alternating pattern
-                for i in range(len(changes)-1)
+            
+            # More strict pattern detection
+            alternating_pattern = (
+                len(changes) >= 4 and  # Need at least 4 changes
+                all(abs(change) > 50 for change in changes) and  # Significant changes
+                all(changes[i] * changes[i+1] < 0 for i in range(len(changes)-1))  # Alternating
             )
             
             if is_flash or alternating_pattern:
                 timestamp = frame_count / fps
                 
-                # Determine risk level based on confidence and pattern
-                risk_level = "HIGH" if (confidence > 0.8 or alternating_pattern) else "MEDIUM"
+                # More strict risk level determination
+                risk_level = "HIGH" if (confidence > 0.9 or  # Increased from 0.8
+                                     (alternating_pattern and abs(np.mean(changes)) > 70)  # Added intensity check
+                                     ) else "MEDIUM"
                 
                 # Add to flash events if not too close to previous event
-                if not flash_events or abs(timestamp - flash_events[-1]["timestamp"]) > 0.3:
+                if not flash_events or abs(timestamp - flash_events[-1]["timestamp"]) > 0.5:  # Increased from 0.3
                     flash_events.append({
                         "timestamp": timestamp,
                         "intensity": confidence * 100,
